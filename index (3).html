@@ -1,0 +1,895 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Majlis</title>
+<meta name="theme-color" content="#14172A">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Majlis">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23F2A541'/%3E%3Cpath d='M12 9l12 7-12 7z' fill='%2314172A'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;700&family=Inter:wght@400;500;600&display=swap">
+<style>
+/* Layout: cinema stage on the left, people + chat on the right, a control dock along the bottom. Single dark look, like a room with the lights down. */
+:root{
+  color-scheme:dark;
+  --bg:#14172A; --panel:#1C2038; --raise:#262B48; --line:#323858;
+  --ink:#ECEEF7; --muted:#9BA2C2;
+  --accent:#F2A541; --accent-ink:#1A1405;
+  --off:#E5604F; --ok:#5ED39A;
+  --display:"Outfit",system-ui,sans-serif; --body:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased}
+button,input{font:inherit;color:inherit}
+h1,h2,h3{font-family:var(--display);margin:0;line-height:1.15;text-wrap:balance}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+[hidden]{display:none!important}
+
+/* ---------- Lobby ---------- */
+.lobby{min-height:100%;display:grid;place-items:center;padding:24px max(16px,env(safe-area-inset-right)) 24px max(16px,env(safe-area-inset-left))}
+.lobby-card{width:min(440px,100%);display:flex;flex-direction:column;gap:20px}
+.logo{display:flex;align-items:center;gap:12px}
+.logo i{width:44px;height:44px;border-radius:12px;background:var(--accent);display:grid;place-items:center}
+.logo i svg{width:20px;height:20px}
+.logo b{font-family:var(--display);font-size:30px;letter-spacing:.01em}
+.lobby p.lead{color:var(--muted);margin:0;font-size:16px}
+.field{display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--muted)}
+.field input{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:13px 14px;font-size:16px;color:var(--ink);width:100%}
+.btn{border:0;border-radius:12px;padding:13px 18px;font-weight:600;background:var(--accent);color:var(--accent-ink);display:inline-flex;align-items:center;justify-content:center;gap:8px}
+.btn.ghost{background:var(--raise);color:var(--ink)}
+.btn.sm{padding:8px 12px;font-size:14px;border-radius:10px}
+.or{display:flex;align-items:center;gap:12px;color:var(--muted);font-size:13px}
+.or::before,.or::after{content:"";flex:1;height:1px;background:var(--line)}
+.join-row{display:flex;gap:8px}
+.join-row input{flex:1;min-width:0;text-transform:uppercase;letter-spacing:.12em}
+.features{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:0;padding:0;list-style:none;font-size:13px;color:var(--muted)}
+.features li{display:flex;gap:8px;align-items:center}
+.features li::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--accent);flex:none}
+
+/* ---------- Room ---------- */
+.room{height:100%;display:grid;grid-template-rows:auto minmax(0,1fr) auto}
+.bar{display:flex;align-items:center;gap:10px;padding:10px max(16px,env(safe-area-inset-right)) 10px max(16px,env(safe-area-inset-left));padding-top:calc(10px + env(safe-area-inset-top));border-bottom:1px solid var(--line);background:var(--panel)}
+.bar .logo b{font-size:20px}.bar .logo i{width:30px;height:30px;border-radius:8px}.bar .logo i svg{width:14px;height:14px}
+.code{font-family:var(--display);letter-spacing:.14em;background:var(--raise);padding:4px 10px;border-radius:8px;font-size:14px}
+.bar .grow{flex:1}
+.short{display:none}
+.count{color:var(--muted);font-size:13px;display:flex;align-items:center;gap:6px}
+.count::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--ok)}
+.conn-bad .count::before{background:var(--off)}
+
+.body{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:16px;padding:16px max(16px,env(safe-area-inset-right)) 16px max(16px,env(safe-area-inset-left));min-height:0}
+.stage-col{display:flex;flex-direction:column;gap:12px;min-width:0;min-height:0}
+.stage{position:relative;background:#000;border-radius:16px;overflow:hidden;aspect-ratio:16/9;width:100%;max-height:calc(100vh - 230px);margin:0 auto}
+.stage>#ytHolder,.stage>video,.stage iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
+.stage video#mainVideo{object-fit:contain;background:#000}
+.empty-stage{position:absolute;inset:0;display:grid;place-items:center;text-align:center;padding:24px;color:var(--muted);background:radial-gradient(circle at 50% 40%,#232846,#0E1020 70%)}
+.empty-stage h2{color:var(--ink);font-size:22px;margin-bottom:6px}
+.tap-sync{position:absolute;inset:0;display:grid;place-items:center;background:rgb(10 12 24 / .7)}
+.screen-big{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#000}
+.stage-tag{position:absolute;top:10px;inset-inline-start:10px;background:rgb(0 0 0 / .6);padding:4px 10px;border-radius:999px;font-size:12px}
+
+/* Majlis full screen: the whole stage goes full screen, so chat pop-ups and controls stay visible on top of the movie */
+.stage.is-fs{max-height:none;aspect-ratio:auto;border-radius:0;width:100%;height:100%}
+.stage.pseudo-fs{position:fixed;inset:0;z-index:60;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);background:#000}
+body.lock{overflow:hidden}
+.fs-pops,.fs-bar{display:none}
+.stage.is-fs .fs-pops{display:flex;position:absolute;inset-inline-start:max(16px,env(safe-area-inset-left));bottom:calc(84px + env(safe-area-inset-bottom));flex-direction:column;gap:8px;max-width:min(420px,80%);z-index:5;pointer-events:none}
+.pop{background:rgb(20 23 42 / .88);border:1px solid var(--line);color:var(--ink);padding:9px 14px;border-radius:14px;font-size:15px;line-height:1.35;overflow-wrap:anywhere;box-shadow:0 6px 20px rgb(0 0 0 / .4);animation:popin .25s ease-out;transition:opacity .5s}
+.pop b{color:var(--accent);margin-inline-end:6px}
+.pop.sys{font-size:13px;color:var(--muted)}
+.pop.out{opacity:0}
+@keyframes popin{from{transform:translateY(10px);opacity:0}to{transform:none;opacity:1}}
+.fs-seek{flex-basis:100%;display:flex;align-items:center;gap:10px;color:#fff;font-size:13px;font-variant-numeric:tabular-nums}
+.fs-seek input{flex:1;min-width:0;accent-color:var(--accent)}
+.stage.is-fs .fs-bar{display:flex;flex-wrap:wrap;position:absolute;inset-inline:0;bottom:0;gap:8px;align-items:center;padding:12px max(16px,env(safe-area-inset-right)) calc(12px + env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left));background:linear-gradient(transparent,rgb(0 0 0 / .8));z-index:6;transition:opacity .3s}
+.stage.is-fs.idle .fs-bar{opacity:0;pointer-events:none}
+.stage.is-fs.idle{cursor:none}
+.fs-ic{width:44px;height:44px;border-radius:50%;border:0;background:rgb(255 255 255 / .14);color:#fff;display:grid;place-items:center;font-size:18px;flex:none}
+.fs-ic svg{width:20px;height:20px}
+.fs-ic.off{background:var(--off)}
+.fs-chat{flex:1;display:flex;gap:6px;min-width:0}
+.fs-chat input{flex:1;min-width:0;background:rgb(255 255 255 / .14);border:0;border-radius:999px;padding:11px 16px;color:#fff}
+.fs-chat input::placeholder{color:rgb(255 255 255 / .6)}
+.stage.is-fs .tap-sync{z-index:7}
+@media (max-width:480px){.fs-chat .btn{display:none}#fsReact,#fsBack,#fsFwd{display:none}}
+.subs-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.subs-extra{display:inline-flex;gap:6px;flex-wrap:wrap;align-items:center}
+#subName{max-width:220px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sub-line{position:absolute;inset-inline:6%;bottom:7%;text-align:center;pointer-events:none;z-index:4;transition:bottom .25s}
+.sub-line span{display:inline;background:rgb(0 0 0 / .72);color:#fff;font-size:clamp(14px,2.4vw,30px);line-height:1.5;padding:2px 10px;border-radius:6px;box-decoration-break:clone;-webkit-box-decoration-break:clone;white-space:pre-line;unicode-bidi:plaintext}
+.stage.is-fs .sub-line{bottom:calc(132px + env(safe-area-inset-bottom))}
+.stage.is-fs.idle .sub-line{bottom:calc(36px + env(safe-area-inset-bottom))}
+.queue{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px 14px}
+.queue h3{font-size:15px;margin-bottom:8px}
+.queue h3 span{color:var(--muted);font-weight:500}
+.queue ol{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px;counter-reset:q}
+.queue li{display:flex;align-items:center;gap:8px;background:var(--raise);border-radius:10px;padding:8px 10px;counter-increment:q}
+.queue li::before{content:counter(q);color:var(--muted);font-size:13px;width:18px;text-align:center;flex:none}
+.queue li .qt{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:14px}
+.queue li button{background:transparent;border:1px solid var(--line);color:var(--ink);border-radius:8px;padding:4px 9px;font-size:13px;flex:none}
+.queue li button.play{background:var(--accent);color:var(--accent-ink);border-color:transparent;font-weight:600}
+.loader{display:flex;gap:8px;flex-wrap:wrap}
+.loader input[type=url],.loader input[type=text]{flex:1;min-width:200px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:11px 13px;color:var(--ink)}
+.controls{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.controls .grow{flex:1}
+.controls #ppBtn{min-width:84px}
+.toggle[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
+.now{color:var(--muted);font-size:13px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.now b{color:var(--ink);font-weight:500}
+
+.side{display:flex;flex-direction:column;gap:12px;min-height:0}
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.tile{position:relative;aspect-ratio:4/3;background:var(--raise);border-radius:12px;overflow:hidden;border:2px solid transparent;transition:border-color .15s}
+.tile.speaking{border-color:var(--ok)}
+.tile video{width:100%;height:100%;object-fit:cover;display:block;background:#000}
+.tile .av{position:absolute;inset:0;display:grid;place-items:center}
+.tile .av span{width:52px;height:52px;border-radius:50%;display:grid;place-items:center;font-family:var(--display);font-size:20px;background:var(--line)}
+.tile .nm{position:absolute;inset:auto 6px 6px 6px;display:flex;align-items:center;gap:6px;font-size:12px}
+.tile .nm b{background:rgb(0 0 0 / .55);padding:2px 8px;border-radius:999px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.tile .nm .mic-off{background:var(--off);border-radius:50%;width:20px;height:20px;display:grid;place-items:center;flex:none}
+.tile .nm .mic-off svg{width:12px;height:12px}
+.tile input[type=range]{position:absolute;top:6px;inset-inline:8px;width:calc(100% - 16px);opacity:0;transition:opacity .15s;accent-color:var(--accent)}
+.tile:hover input[type=range],.tile:focus-within input[type=range]{opacity:1}
+.tile .cs{position:absolute;top:6px;inset-inline-start:6px;background:rgb(0 0 0 / .65);padding:2px 8px;border-radius:999px;font-size:11px}
+.tile .cs.bad{background:var(--off);color:#fff}
+.sound-bar{position:fixed;left:50%;transform:translateX(-50%);top:calc(70px + env(safe-area-inset-top));z-index:45}
+.tile .expand{position:absolute;top:6px;inset-inline-end:6px;background:rgb(0 0 0 / .55);border:0;border-radius:8px;padding:4px 8px;font-size:12px}
+
+.chat{flex:1;min-height:180px;background:var(--panel);border:1px solid var(--line);border-radius:14px;display:flex;flex-direction:column;overflow:hidden}
+.chat-head{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border-bottom:1px solid var(--line)}
+.chat-head h3{font-size:15px}
+.reacts{display:flex;gap:4px}
+.reacts button{background:var(--raise);border:0;border-radius:8px;width:34px;height:30px;font-size:16px}
+.msgs{flex:1;overflow-y:auto;padding:10px 12px;display:flex;flex-direction:column;gap:8px;min-height:0}
+.msg{font-size:14px;overflow-wrap:anywhere}
+.msg b{color:var(--accent);font-weight:600;margin-inline-end:6px}
+.msg.sys{color:var(--muted);font-size:12px;text-align:center}
+.chat form{display:flex;gap:6px;padding:8px;border-top:1px solid var(--line)}
+.chat form input{flex:1;min-width:0;background:var(--raise);border:0;border-radius:10px;padding:10px 12px;color:var(--ink)}
+
+.dock{display:flex;justify-content:center;gap:10px;flex-wrap:wrap;padding:10px max(16px,env(safe-area-inset-right)) calc(10px + env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left));background:var(--panel);border-top:1px solid var(--line)}
+.ctl{display:flex;flex-direction:column;align-items:center;gap:4px;background:none;border:0;padding:0;font-size:11px;color:var(--muted);min-width:58px}
+.ctl i{width:48px;height:48px;border-radius:50%;background:var(--raise);display:grid;place-items:center;transition:background .15s}
+.ctl i svg{width:22px;height:22px}
+.ctl.off i{background:var(--off)}
+.ctl.on i{background:var(--accent);color:var(--accent-ink)}
+.ctl.leave i{background:var(--off)}
+.ctl:hover i{filter:brightness(1.12)}
+
+.float-react{position:fixed;bottom:110px;font-size:34px;pointer-events:none;z-index:40;animation:rise 2.4s ease-out forwards}
+@keyframes rise{from{transform:translateY(0);opacity:1}to{transform:translateY(-260px);opacity:0}}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(100px + env(safe-area-inset-bottom));background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:999px;font-size:14px;z-index:50;max-width:calc(100% - 32px);text-align:center}
+.help{font-size:12px;color:var(--muted);margin:0}
+
+@media (max-width:900px){
+  .room{height:auto;min-height:100%}
+  .body{grid-template-columns:minmax(0,1fr)}
+  .stage{max-height:none}
+  .tiles{grid-template-columns:repeat(auto-fill,minmax(130px,1fr))}
+  .chat{min-height:260px;max-height:360px}
+  .dock{position:sticky;bottom:0;z-index:5}
+}
+@media (max-width:480px){.ctl{min-width:50px}.ctl i{width:44px;height:44px}.bar .logo b{display:none}.long{display:none}.short{display:inline}.features{grid-template-columns:1fr}}
+@media (prefers-reduced-motion:reduce){.float-react{animation-duration:.01s}}
+</style>
+</head>
+<body>
+
+<!-- Lobby -->
+<section class="lobby" id="lobby">
+  <div class="lobby-card">
+    <div class="logo"><i><svg viewBox="0 0 24 24" fill="#14172A"><path d="M8 5l12 7-12 7z"/></svg></i><b>Majlis</b></div>
+    <h1 style="font-size:28px" id="lobbyTitle">Watch together, from anywhere.</h1>
+    <p class="lead" id="lobbyLead">Start a room, send the link to your friends, and watch the same video at the same moment while you talk.</p>
+    <label class="field">Your name<input id="nameIn" maxlength="30" placeholder="e.g. Sara" autocomplete="nickname"></label>
+    <button class="btn" id="createBtn" type="button">Start a new room</button>
+    <div id="joinBlock">
+      <div class="or">or join a friend</div>
+      <div class="join-row" style="margin-top:12px"><input class="field" id="codeIn" maxlength="12" placeholder="ROOM CODE" style="background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:13px 14px;font-size:16px"><button class="btn ghost" id="joinBtn" type="button">Join</button></div>
+    </div>
+    <button class="btn ghost" id="installBtn" type="button" hidden>Install Majlis on this device</button>
+    <p class="help" id="iosHint" hidden>To add Majlis to your iPhone home screen: tap the Share button <b>⬆︎</b> in Safari, then <b>Add to Home Screen</b>.</p>
+    <ul class="features"><li>YouTube, video links, files</li><li>Voice and video calls</li><li>Screen sharing</li><li>Chat and reactions</li></ul>
+  </div>
+</section>
+
+<!-- Room -->
+<section class="room" id="room" hidden>
+  <header class="bar" id="bar">
+    <div class="logo"><i><svg viewBox="0 0 24 24" fill="#14172A"><path d="M8 5l12 7-12 7z"/></svg></i><b>Majlis</b></div>
+    <span class="code" id="codeTag">——</span>
+    <button class="btn sm" id="inviteBtn" type="button"><span class="long">Copy invite link</span><span class="short">Invite</span></button>
+    <span class="grow"></span>
+    <span class="count" id="count">1 here</span>
+  </header>
+
+  <div class="body">
+    <div class="stage-col">
+      <div class="stage" id="stage">
+        <div id="ytHolder" hidden><div id="yt"></div></div>
+        <video id="mainVideo" playsinline controls controlslist="nofullscreen" disablepictureinpicture hidden></video>
+        <video class="screen-big" id="bigView" playsinline autoplay hidden></video>
+        <span class="stage-tag" id="stageTag" hidden></span>
+        <div class="empty-stage" id="emptyStage"><div><h2>Pick something to watch</h2><p>Paste a YouTube link or a video link below. Everyone in the room will see it.</p></div></div>
+        <div class="sub-line" id="subLine" hidden></div>
+        <div class="fs-pops" id="fsPops" aria-live="polite"></div>
+        <div class="fs-bar" id="fsBar">
+          <div class="fs-seek"><span id="fsCur">0:00</span><input type="range" id="fsSeek" min="0" max="100" step="1" value="0" aria-label="Movie position"><span id="fsDur">0:00</span></div>
+          <button class="fs-ic" type="button" id="fsBack" aria-label="Back 10 seconds">⟲</button>
+          <button class="fs-ic" type="button" id="fsPP" aria-label="Play or pause for everyone"></button>
+          <button class="fs-ic" type="button" id="fsFwd" aria-label="Forward 10 seconds">⟳</button>
+          <button class="fs-ic" type="button" id="fsMic" aria-label="Mute or unmute your mic"></button>
+          <form class="fs-chat" id="fsChat"><input id="fsChatIn" maxlength="500" placeholder="Message everyone" autocomplete="off"><button class="btn sm" type="submit">Send</button></form>
+          <button class="fs-ic" type="button" id="fsReact" aria-label="Send a laugh">😂</button>
+          <button class="fs-ic" type="button" id="fsExit" aria-label="Exit full screen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg></button>
+        </div>
+        <div class="tap-sync" id="tapSync" hidden><button class="btn" type="button" id="tapSyncBtn">Tap to join the playback</button></div>
+      </div>
+      <form class="loader" id="loadForm">
+        <input type="text" id="urlIn" placeholder="Paste a YouTube or video link (.mp4, .webm)" autocomplete="off">
+        <button class="btn" type="submit">Play for everyone</button>
+        <button class="btn ghost" type="button" id="queueAddBtn">Add to queue</button>
+        <label class="btn ghost" for="fileIn" style="cursor:pointer">Use a file</label>
+        <input type="file" id="fileIn" accept="video/*" hidden>
+      </form>
+      <div class="controls" id="controls">
+        <button class="btn ghost sm" type="button" id="backBtn" aria-label="Back 10 seconds">⟲ 10s</button>
+        <button class="btn sm" type="button" id="ppBtn">Play</button>
+        <button class="btn ghost sm" type="button" id="fsBtn">⛶ Full screen</button>
+        <button class="btn ghost sm" type="button" id="fwdBtn" aria-label="Forward 10 seconds">10s ⟳</button>
+        <span class="grow"></span>
+        <button class="btn ghost sm toggle" type="button" id="duckBtn" aria-pressed="false">Lower movie when friends talk</button>
+        <button class="btn ghost sm" type="button" id="syncBtn">Sync everyone to me</button>
+      </div>
+      <div class="now"><span id="nowText">Nothing playing yet.</span></div>
+      <div class="subs-row">
+        <button class="btn ghost sm" type="button" id="subBtn">Add subtitles</button>
+        <span class="subs-extra" id="subsExtra" hidden>
+          <span class="help" id="subName"></span>
+          <button class="btn ghost sm" type="button" id="subEarlier" aria-label="Show subtitles earlier">−½s</button>
+          <button class="btn ghost sm" type="button" id="subLater" aria-label="Show subtitles later">+½s</button>
+          <button class="btn ghost sm" type="button" id="subChange">Change</button>
+        </span>
+        <input type="file" id="subIn" accept=".srt,.vtt,text/vtt,application/x-subrip" hidden>
+      </div>
+      <section class="queue" id="queueBox" hidden>
+        <h3>Up next <span id="queueCount"></span></h3>
+        <ol id="queueList"></ol>
+      </section>
+      <p class="help">Anyone in the room can play, pause or skip. It changes for everyone. Use headphones so the movie sound doesn't echo into your mic.</p>
+    </div>
+
+    <aside class="side">
+      <div class="tiles" id="tiles"></div>
+      <div class="chat">
+        <div class="chat-head"><h3>Chat</h3><div class="reacts" id="reacts"><button type="button" aria-label="Laugh">😂</button><button type="button" aria-label="Love">❤️</button><button type="button" aria-label="Wow">😮</button><button type="button" aria-label="Clap">👏</button></div></div>
+        <div class="msgs" id="msgs" aria-live="polite"></div>
+        <form id="chatForm"><input id="chatIn" maxlength="500" placeholder="Say something" autocomplete="off"><button class="btn sm" type="submit">Send</button></form>
+      </div>
+    </aside>
+  </div>
+
+  <nav class="dock" aria-label="Call controls">
+    <button class="ctl" id="micBtn" type="button"><i></i><span>Mic</span></button>
+    <button class="ctl" id="camBtn" type="button"><i></i><span>Camera</span></button>
+    <button class="ctl" id="spkBtn" type="button"><i></i><span>Speaker</span></button>
+    <button class="ctl" id="scrBtn" type="button"><i></i><span>Share screen</span></button>
+    <button class="ctl leave" id="leaveBtn" type="button"><i></i><span>Leave</span></button>
+  </nav>
+</section>
+
+<button class="btn sound-bar" id="soundBtn" type="button" hidden>Tap to hear your friends</button>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+(function(){
+"use strict";
+const $=s=>document.querySelector(s);
+const I={
+ mic:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0014 0M12 18v3"/></svg>',
+ micOff:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M15 10V6a3 3 0 00-5.7-1.3M9 9v2a3 3 0 004.6 2.5M5 11a7 7 0 0011.4 5.4M19 11a7 7 0 01-.6 2.8M12 18v3M3 3l18 18"/></svg>',
+ cam:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="3" y="6" width="13" height="12" rx="2"/><path d="M16 10l5-3v10l-5-3z"/></svg>',
+ camOff:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 16v1a1 1 0 01-1 1H5a2 2 0 01-2-2V8a2 2 0 012-2h1M10 6h5a1 1 0 011 1v3l5-3v10M3 3l18 18"/></svg>',
+ spk:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9v6h4l5 4V5L8 9z"/><path d="M16.5 8.5a5 5 0 010 7M19 6a8.5 8.5 0 010 12"/></svg>',
+ spkOff:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9v6h4l5 4V5L8 9z"/><path d="M17 9l5 6M22 9l-5 6"/></svg>',
+ scr:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4M12 13V8M9.5 10.5L12 8l2.5 2.5"/></svg>',
+ leave:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 15c5-5 13-5 18 0l-2.5 2.5-3-1.5v-2.5a10 10 0 00-7 0V16l-3 1.5z"/></svg>'
+};
+
+/* ---------- state ---------- */
+const S={room:"",id:"",name:"",es:null,offset:0,ice:[],welcomed:false,
+  mic:null,micOn:false,camTrack:null,camOn:false,screenTrack:null,screenOn:false,speakerOn:true,
+  peers:new Map(), /* id -> {name,media,pc,el,tile,pending,vol} */
+  shared:null, suppressUntil:0, lastLocalTick:{t:0,at:0}};
+const now=()=>Date.now()+S.offset;
+window.__majlis=S; /* handy for troubleshooting in the browser console */
+
+function toast(m){const t=$("#toast");t.textContent=m;t.hidden=false;clearTimeout(toast.h);toast.h=setTimeout(()=>t.hidden=true,2600)}
+function initials(n){return (n||"?").trim().split(/\s+/).map(p=>p[0]).slice(0,2).join("").toUpperCase()}
+function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
+function copy(text){
+  const ok=()=>toast("Link copied. Send it to your friends.");
+  if(navigator.clipboard&&window.isSecureContext)navigator.clipboard.writeText(text).then(ok,fb);else fb();
+  function fb(){const ta=document.createElement("textarea");ta.value=text;document.body.appendChild(ta);ta.select();try{document.execCommand("copy");ok()}catch(e){prompt("Copy this link:",text)}ta.remove()}
+}
+
+/* ---------- lobby ---------- */
+const pathCode=(location.pathname.match(/^\/r\/([A-Za-z0-9]+)/)||[])[1];
+try{$("#nameIn").value=localStorage.getItem("majlis.name")||""}catch(e){}
+if(pathCode){
+  $("#lobbyTitle").textContent="You're invited to room "+pathCode.toUpperCase();
+  $("#lobbyLead").textContent="Type your name and join. Your friends are waiting.";
+  $("#createBtn").textContent="Join the room";$("#joinBlock").hidden=true;
+}
+function needName(){const n=$("#nameIn").value.trim();if(!n){$("#nameIn").focus();toast("Type your name first.");return null}try{localStorage.setItem("majlis.name",n)}catch(e){}return n}
+function newCode(){const a="ABCDEFGHJKLMNPQRSTUVWXYZ23456789";let s="";const r=crypto.getRandomValues(new Uint8Array(6));r.forEach(b=>s+=a[b%a.length]);return s}
+$("#createBtn").addEventListener("click",()=>{const n=needName();if(!n)return;enter(pathCode?pathCode.toUpperCase():newCode(),n)});
+$("#joinBtn").addEventListener("click",()=>{const n=needName();if(!n)return;const c=$("#codeIn").value.toUpperCase().replace(/[^A-Z0-9]/g,"");if(!c){toast("Type the room code.");return}enter(c,n)});
+$("#codeIn").addEventListener("keydown",e=>{if(e.key==="Enter")$("#joinBtn").click()});
+$("#nameIn").addEventListener("keydown",e=>{if(e.key==="Enter")$("#createBtn").click()});
+
+async function enter(code,name){
+  S.room=code;S.name=name;
+  try{S.id=sessionStorage.getItem("majlis.id."+code)||crypto.randomUUID()}catch(e){S.id=Math.random().toString(36).slice(2)}
+  try{sessionStorage.setItem("majlis.id."+code,S.id)}catch(e){}
+  history.replaceState(null,"","/r/"+code);
+  $("#lobby").hidden=true;$("#room").hidden=false;$("#codeTag").textContent=code;
+  renderDock();addTile("me",name,true);
+  try{
+    const st=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}});
+    S.mic=st.getAudioTracks()[0];S.micOn=true;
+  }catch(e){toast("Microphone is blocked. You can still watch and chat. Allow the mic in your browser to talk.")}
+  renderDock();updateMeTile();watchMyMic();
+  connect();
+}
+
+/* ---------- signaling ---------- */
+function connect(){
+  const q=new URLSearchParams({room:S.room,id:S.id,name:S.name});
+  const es=new EventSource("/events?"+q);S.es=es;
+  es.addEventListener("welcome",e=>onWelcome(JSON.parse(e.data)));
+  es.addEventListener("join",e=>{const d=JSON.parse(e.data);
+    if(S.peers.has(d.id)){const p=S.peers.get(d.id);if(p.pc){p.pc.close();p.pc=null}p.pending=[];p.media=d.media||p.media;updatePeerTile(d.id);sys(d.name+" reconnected")}
+    else{ensurePeer(d.id,d.name,d.media);sys(d.name+" joined")}});
+  es.addEventListener("leave",e=>{const d=JSON.parse(e.data);const p=S.peers.get(d.id);if(p)sys(p.name+" left");dropPeer(d.id)});
+  es.addEventListener("msg",e=>onMsg(JSON.parse(e.data)));
+  es.addEventListener("full",e=>{es.close();toast("This room is full ("+JSON.parse(e.data).max+" people). Ask the host for a new room.")});
+  es.onerror=()=>$("#bar").classList.add("conn-bad");
+  es.onopen=()=>$("#bar").classList.remove("conn-bad");
+}
+function post(type,data,to){
+  return fetch("/send",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({room:S.room,from:S.id,type,data,to})}).catch(()=>{});
+}
+function onWelcome(d){
+  if(!isFinite(bestRtt))S.offset=d.serverTime-Date.now();S.ice=d.ice||[];
+  const first=!S.welcomed;S.welcomed=true;
+  if(first){
+    (d.chat||[]).forEach(c=>chatLine(c.name,c.text));
+    sys("You joined room "+S.room+". Share the invite link.");
+    d.peers.forEach(p=>{ensurePeer(p.id,p.name,p.media);call(p.id)});
+    sendMedia();
+  }else if(d.fresh){
+    /* We dropped out long enough for the others to remove us (or the server restarted): rebuild every call. */
+    const ids=new Set(d.peers.map(p=>p.id));
+    [...S.peers.keys()].forEach(id=>{if(!ids.has(id))dropPeer(id)});
+    d.peers.forEach(p=>{const x=ensurePeer(p.id,p.name,p.media);if(x.pc){x.pc.close();x.pc=null}x.pending=[];call(p.id)});
+    sendMedia();sys("Reconnected.");
+  }else{
+    d.peers.forEach(p=>{if(!S.peers.has(p.id)){ensurePeer(p.id,p.name,p.media);call(p.id)}});
+  }
+  S.queue=d.queue||[];renderQueue();S.subs=d.subs||null;
+  if(d.video)applyShared(d.video);
+  else if(S.shared&&kind)setTimeout(()=>share(),800); /* server restarted: give the room our current video back */
+  updateCount();
+}
+function onMsg(m){
+  const p=S.peers.get(m.from);
+  if(m.type==="signal")onSignal(m.from,m.data);
+  else if(m.type==="video")applyShared(m.data,true);
+  else if(m.type==="chat")chatLine(m.data.name,m.data.text);
+  else if(m.type==="react")floatReact(m.data.e);
+  else if(m.type==="queue"){S.queue=m.data||[];renderQueue()}
+  else if(m.type==="subs"){const had=S.subs;S.subs=m.data;applySubs();if(m.data&&(!had||had.vtt!==m.data.vtt)){sys(m.data.by+" added subtitles: "+m.data.name);pop("",m.data.by+" added subtitles",true)}}
+  else if(m.type==="media"&&p){p.media=m.data;updatePeerTile(m.from)}
+}
+
+/* ---------- WebRTC (mesh: each person connects to each other person) ---------- */
+function ensurePeer(id,name,media){
+  if(S.peers.has(id))return S.peers.get(id);
+  const p={name,media:media||{},pc:null,pending:[],vol:1};S.peers.set(id,p);addTile(id,name);updatePeerTile(id);updateCount();return p;
+}
+function newPC(id){
+  const p=S.peers.get(id);
+  const pc=new RTCPeerConnection({iceServers:S.ice});p.pc=pc;p.analyser=null;clearTimeout(p.dcTimer);
+  pc.onicecandidate=e=>{if(e.candidate)post("signal",{ice:e.candidate},id)};
+  const stream=new MediaStream();p.stream=stream;
+  pc.ontrack=e=>{stream.addTrack(e.track);const v=p.tile.querySelector("video");if(v.srcObject!==stream)v.srcObject=stream;v.play().catch(()=>{$("#soundBtn").hidden=false});watchLevel(id,stream)};
+  pc.onconnectionstatechange=()=>{
+    if(p.pc!==pc)return;const st=pc.connectionState;clearTimeout(p.dcTimer);
+    setCallStatus(id,st);
+    if(st==="connected"){p.fails=0;return}
+    /* The person who started the call repairs it. Give a brief network blip 6 seconds to recover by itself. */
+    if((st==="failed"||st==="disconnected")&&p.caller){
+      p.dcTimer=setTimeout(()=>{if(p.pc!==pc||!S.peers.has(id))return;
+        p.fails=(p.fails||0)+1;
+        if(p.fails>=3)setCallStatus(id,"stuck");
+        if(p.fails===3)sys("Having trouble connecting the call with "+p.name+". Their network may need a TURN server (see README).");
+        if(p.fails<=20)call(id);},st==="failed"?1000:6000);
+    }
+  };
+  return pc;
+}
+function attachLocal(pc){
+  pc.getTransceivers().forEach(t=>{
+    const kind=t.receiver.track.kind;t.direction="sendrecv";
+    t.sender.replaceTrack(kind==="audio"?S.mic:(S.screenOn?S.screenTrack:(S.camOn?S.camTrack:null))).catch(()=>{});
+  });
+}
+async function call(id){ /* newcomer offers to everyone already in the room */
+  const p=S.peers.get(id);if(!p)return;if(p.pc)p.pc.close();p.pending=[];p.caller=true;
+  const pc=newPC(id);
+  pc.addTransceiver("audio",{direction:"sendrecv"});pc.addTransceiver("video",{direction:"sendrecv"});
+  attachLocal(pc);
+  const offer=await pc.createOffer();await pc.setLocalDescription(offer);
+  post("signal",{sdp:pc.localDescription},id);
+}
+async function onSignal(from,d){
+  const p=S.peers.get(from)||ensurePeer(from,"Guest");
+  try{
+    if(d.sdp){
+      if(d.sdp.type==="offer"){
+        if(p.pc)p.pc.close();p.caller=false;
+        const pc=newPC(from);await pc.setRemoteDescription(d.sdp);attachLocal(pc);
+        await pc.setLocalDescription(await pc.createAnswer());post("signal",{sdp:pc.localDescription},from);
+      }else if(p.pc){await p.pc.setRemoteDescription(d.sdp)}
+      const q=p.pending.splice(0);for(const c of q)await p.pc.addIceCandidate(c).catch(()=>{});
+    }else if(d.ice){
+      if(p.pc&&p.pc.remoteDescription)await p.pc.addIceCandidate(d.ice).catch(()=>{});else p.pending.push(d.ice);
+    }
+  }catch(e){console.warn("signal",e)}
+}
+function dropPeer(id){const p=S.peers.get(id);if(!p)return;clearTimeout(p.dcTimer);if(p.pc)p.pc.close();p.tile.remove();S.peers.delete(id);updateCount()}
+function setVideoTrack(track){S.peers.forEach(p=>{if(!p.pc)return;p.pc.getTransceivers().forEach(t=>{if(t.receiver.track.kind==="video")t.sender.replaceTrack(track).catch(()=>{})})})}
+function sendMedia(){post("media",{mic:!!(S.mic&&S.micOn),cam:S.camOn,screen:S.screenOn})}
+
+/* ---------- call status on each tile ---------- */
+function setCallStatus(id,st){
+  const p=S.peers.get(id);if(!p||!p.tile)return;const el=p.tile.querySelector(".cs");if(!el)return;
+  el.classList.remove("bad");
+  if(st==="connected"){el.hidden=true;
+    /* note whether we go direct or through the relay (handy when troubleshooting) */
+    p.pc.getStats().then(r=>{let pair=null,local={};r.forEach(x=>{if(x.type==="transport"&&x.selectedCandidatePairId)pair=r.get(x.selectedCandidatePairId);if(x.type==="candidate-pair"&&x.selected)pair=x});
+      if(pair){const lc=r.get(pair.localCandidateId);p.route=lc&&lc.candidateType==="relay"?"relay":"direct";p.tile.title="Call connected ("+p.route+")"}}).catch(()=>{});
+    return}
+  el.hidden=false;
+  if(st==="new"||st==="connecting")el.textContent="Connecting…";
+  else if(st==="stuck"){el.textContent="Can't connect";el.classList.add("bad")}
+  else if(st==="failed"||st==="disconnected")el.textContent="Reconnecting…";
+}
+$("#soundBtn").addEventListener("click",()=>{
+  $("#soundBtn").hidden=true;
+  try{actx&&actx.resume()}catch(e){}
+  document.querySelectorAll(".tile video").forEach(v=>{if(v.srcObject)v.play().catch(()=>{})});
+});
+/* if the browser blocked sound, offer the button again */
+setInterval(()=>{S.peers.forEach(p=>{const v=p.tile&&p.tile.querySelector("video");if(v&&v.srcObject&&v.paused&&S.speakerOn)$("#soundBtn").hidden=false})},3000);
+function watchMyMic(){
+  try{
+    if(!S.mic||S.myMeter===S.mic)return;S.myMeter=S.mic;
+    actx=actx||new (window.AudioContext||window.webkitAudioContext)();
+    const an=actx.createAnalyser();an.fftSize=512;actx.createMediaStreamSource(new MediaStream([S.mic])).connect(an);
+    const buf=new Uint8Array(an.frequencyBinCount);
+    const tick=()=>{if(S.myMeter!==S.mic)return;an.getByteFrequencyData(buf);let s=0;for(const v of buf)s+=v;
+      S.meTile.classList.toggle("speaking",S.micOn&&s/buf.length>18);requestAnimationFrame(tick)};tick();
+  }catch(e){}
+}
+
+/* ---------- speaking indicator ---------- */
+let actx=null;
+function watchLevel(id,stream){
+  try{
+    if(!stream.getAudioTracks().length)return;actx=actx||new (window.AudioContext||window.webkitAudioContext)();
+    const p=S.peers.get(id);if(!p||p.analyser)return;
+    const src=actx.createMediaStreamSource(stream);const an=actx.createAnalyser();an.fftSize=512;src.connect(an);p.analyser=an;
+    const buf=new Uint8Array(an.frequencyBinCount);
+    let last=0;
+    const tick=()=>{if(!S.peers.has(id)||p.analyser!==an)return;an.getByteFrequencyData(buf);let s=0;for(const v of buf)s+=v;
+      const talking=s/buf.length>18&&p.media.mic!==false;if(talking)last=Date.now();
+      p.speaking=talking||Date.now()-last<900;p.tile.classList.toggle("speaking",talking);requestAnimationFrame(tick)};tick();
+  }catch(e){}
+}
+
+/* ---------- tiles ---------- */
+function addTile(id,name,me){
+  const el=document.createElement("div");el.className="tile";el.dataset.id=id;
+  el.innerHTML=`<video playsinline autoplay ${id==="me"?"muted":""}></video><div class="av"><span>${esc(initials(name))}</span></div>
+   ${id==="me"?"":`<span class="cs">Connecting…</span>`}<div class="nm"><span class="mic-off" hidden>${I.micOff}</span><b>${esc(name)}${me?" (you)":""}</b></div>
+   ${id==="me"?"":`<input type="range" min="0" max="1" step="0.05" value="1" aria-label="Volume for ${esc(name)}"><button class="expand" type="button" hidden>Watch big</button>`}`;
+  $("#tiles").appendChild(el);
+  if(id==="me")S.meTile=el;else{
+    const p=S.peers.get(id);p.tile=el;
+    el.querySelector("input").addEventListener("input",e=>{p.vol=Number(e.target.value);el.querySelector("video").volume=p.vol});
+    el.querySelector(".expand").addEventListener("click",()=>toggleBig(id));
+  }
+}
+function updatePeerTile(id){
+  const p=S.peers.get(id);if(!p||!p.tile)return;
+  const showVid=!!(p.media.cam||p.media.screen);
+  p.tile.querySelector(".av").hidden=showVid;p.tile.querySelector("video").style.visibility=showVid?"visible":"hidden";
+  p.tile.querySelector(".mic-off").hidden=p.media.mic!==false;
+  const ex=p.tile.querySelector(".expand");ex.hidden=!showVid;ex.textContent=S.bigId===id?"Close":(p.media.screen?"Watch screen":"Watch big");
+  p.tile.querySelector("video").muted=!S.speakerOn;
+  if(S.bigId===id&&!showVid)toggleBig(null);
+}
+function updateMeTile(){
+  const v=S.meTile.querySelector("video");const t=S.screenOn?S.screenTrack:(S.camOn?S.camTrack:null);
+  v.srcObject=t?new MediaStream([t]):null;S.meTile.querySelector(".av").hidden=!!t;v.style.visibility=t?"visible":"hidden";
+  S.meTile.querySelector(".mic-off").hidden=!!(S.mic&&S.micOn);
+}
+function toggleBig(id){
+  const big=$("#bigView");
+  if(!id||S.bigId===id){S.bigId=null;big.hidden=true;big.srcObject=null;$("#stageTag").hidden=true}
+  else{const p=S.peers.get(id);S.bigId=id;big.srcObject=p.stream;big.muted=true;big.hidden=false;big.play().catch(()=>{});$("#stageTag").hidden=false;$("#stageTag").textContent=p.name+(p.media.screen?"'s screen":"")}
+  S.peers.forEach((_,k)=>updatePeerTile(k));
+}
+function updateCount(){const n=S.peers.size+1;$("#count").textContent=n+(n===1?" here":" watching")}
+
+/* ---------- dock ---------- */
+function renderDock(){
+  const set=(id,icon,label,cls)=>{const b=$(id);b.querySelector("i").innerHTML=icon;b.querySelector("span").textContent=label;b.classList.remove("on","off");if(cls)b.classList.add(cls)};
+  const micLive=!!(S.mic&&S.micOn);
+  set("#micBtn",micLive?I.mic:I.micOff,micLive?"Mute":"Unmute",micLive?"":"off");
+  set("#camBtn",S.camOn?I.cam:I.camOff,S.camOn?"Stop video":"Start video",S.camOn?"on":"");
+  set("#spkBtn",S.speakerOn?I.spk:I.spkOff,S.speakerOn?"Speaker on":"Speaker off",S.speakerOn?"":"off");
+  set("#scrBtn",I.scr,S.screenOn?"Stop sharing":"Share screen",S.screenOn?"on":"");
+  set("#leaveBtn",I.leave,"Leave","");
+}
+$("#micBtn").addEventListener("click",async()=>{
+  if(!S.mic){try{const st=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true}});S.mic=st.getAudioTracks()[0];
+    S.peers.forEach(p=>{if(p.pc)p.pc.getTransceivers().forEach(t=>{if(t.receiver.track.kind==="audio")t.sender.replaceTrack(S.mic)})});S.micOn=true}
+    catch(e){toast("Microphone is blocked. Allow it in your browser settings, then try again.");return}}
+  else{S.micOn=!S.micOn;S.mic.enabled=S.micOn}
+  renderDock();updateMeTile();watchMyMic();sendMedia();
+});
+$("#camBtn").addEventListener("click",async()=>{
+  if(S.camOn){S.camOn=false;if(S.camTrack){S.camTrack.stop();S.camTrack=null}}
+  else{try{const st=await navigator.mediaDevices.getUserMedia({video:{width:{ideal:640},height:{ideal:480},facingMode:"user"}});S.camTrack=st.getVideoTracks()[0];S.camOn=true}
+    catch(e){toast("Camera is blocked or in use by another app.");return}}
+  if(!S.screenOn)setVideoTrack(S.camOn?S.camTrack:null);
+  renderDock();updateMeTile();sendMedia();
+});
+$("#spkBtn").addEventListener("click",()=>{S.speakerOn=!S.speakerOn;S.peers.forEach((_,id)=>updatePeerTile(id));renderDock();toast(S.speakerOn?"Speaker on":"Speaker off. You won't hear your friends.")});
+$("#scrBtn").addEventListener("click",async()=>{
+  if(S.screenOn){stopScreen();return}
+  if(!navigator.mediaDevices.getDisplayMedia){toast("Screen sharing isn't supported on this device. Try a computer browser.");return}
+  try{const st=await navigator.mediaDevices.getDisplayMedia({video:{frameRate:{ideal:24}},audio:false});S.screenTrack=st.getVideoTracks()[0];S.screenOn=true;
+    S.screenTrack.onended=stopScreen;setVideoTrack(S.screenTrack);renderDock();updateMeTile();sendMedia();toast("You're sharing your screen.")}
+  catch(e){}
+});
+function stopScreen(){if(S.screenTrack)S.screenTrack.stop();S.screenTrack=null;S.screenOn=false;setVideoTrack(S.camOn?S.camTrack:null);renderDock();updateMeTile();sendMedia()}
+$("#leaveBtn").addEventListener("click",()=>{S.es&&S.es.close();S.peers.forEach((_,id)=>dropPeer(id));[S.mic,S.camTrack,S.screenTrack].forEach(t=>t&&t.stop());location.href="/"});
+$("#inviteBtn").addEventListener("click",()=>copy(location.origin+"/r/"+S.room));
+
+/* ---------- chat ---------- */
+function chatLine(name,text){const d=document.createElement("div");d.className="msg";d.innerHTML=`<b>${esc(name)}</b>${esc(text)}`;addMsg(d);pop(name,text)}
+function pop(name,text,isSys){
+  if(!isFs())return;const box=$("#fsPops");
+  const el=document.createElement("div");el.className="pop"+(isSys?" sys":"");el.innerHTML=isSys?esc(text):`<b>${esc(name)}</b>${esc(text)}`;
+  box.appendChild(el);while(box.children.length>5)box.firstChild.remove();
+  setTimeout(()=>el.classList.add("out"),isSys?3500:8000);setTimeout(()=>el.remove(),isSys?4100:8600);
+}
+function sys(text){const d=document.createElement("div");d.className="msg sys";d.textContent=text;addMsg(d)}
+function addMsg(d){const box=$("#msgs");while(box.children.length>300)box.firstChild.remove();const atEnd=box.scrollHeight-box.scrollTop-box.clientHeight<40;box.appendChild(d);if(atEnd)box.scrollTop=box.scrollHeight}
+$("#chatForm").addEventListener("submit",e=>{e.preventDefault();const v=$("#chatIn").value.trim();if(!v)return;post("chat",{text:v});$("#chatIn").value=""});
+$("#reacts").addEventListener("click",e=>{const b=e.target.closest("button");if(b)post("react",{e:b.textContent})});
+function floatReact(e){const s=document.createElement("div");s.className="float-react";s.textContent=e;s.style.left=(15+Math.random()*60)+"%";(isFs()?$("#stage"):document.body).appendChild(s);setTimeout(()=>s.remove(),2500)}
+
+/* ---------- synced player ---------- */
+let yt=null,ytReady=false,ytQueue=null,kind=null,curSrc=null,localFileName=null;
+const mv=$("#mainVideo");
+window.onYouTubeIframeAPIReady=()=>{ytReady=true;if(ytQueue){const q=ytQueue;ytQueue=null;q()}};
+function loadYTApi(){if(loadYTApi.done)return;loadYTApi.done=true;const s=document.createElement("script");s.src="https://www.youtube.com/iframe_api";document.head.appendChild(s)}
+function ytId(u){const m=String(u).match(/(?:youtu\.be\/|v=|\/embed\/|\/shorts\/|\/live\/)([A-Za-z0-9_-]{11})/);return m?m[1]:(/^[A-Za-z0-9_-]{11}$/.test(u)?u:null)}
+
+const P={
+  time(){return kind==="yt"?(yt&&yt.getCurrentTime?yt.getCurrentTime():0):mv.currentTime||0},
+  playing(){return kind==="yt"?(yt&&yt.getPlayerState&&yt.getPlayerState()===1):!mv.paused},
+  play(){if(kind==="yt"){yt&&yt.playVideo();setTimeout(()=>{if(S.shared&&S.shared.playing&&yt&&yt.getPlayerState()!==1&&yt.getPlayerState()!==3)$("#tapSync").hidden=false},1800)}
+    else mv.play().catch(()=>{$("#tapSync").hidden=false})},
+  pause(){if(kind==="yt")yt&&yt.pauseVideo();else mv.pause()},
+  seek(t){if(kind==="yt")yt&&yt.seekTo(t,true);else{try{mv.currentTime=t}catch(e){}}}
+};
+function showStage(k){
+  $("#emptyStage").hidden=!!k;$("#ytHolder").hidden=k!=="yt";mv.hidden=!(k==="url"||k==="file");
+}
+function load(v,cb){
+  if(v.kind==="yt"){
+    kind="yt";showStage("yt");mv.pause();
+    const go=()=>{
+      if(yt){if(curSrc!==v.src){yt.cueVideoById(v.src);curSrc=v.src;cb&&setTimeout(cb,400)}else cb&&cb();return}
+      curSrc=v.src;
+      yt=new YT.Player("yt",{videoId:v.src,playerVars:{playsinline:1,rel:0,modestbranding:1,fs:0},events:{
+        onReady:()=>cb&&cb(),
+        onStateChange:e=>{if(e.data===1||e.data===2)localEvent({type:e.data===1?"play":"pause"});if(e.data===0)videoEnded()}}});
+    };
+    if(ytReady)go();else{ytQueue=go;loadYTApi()}
+  }else if(v.kind==="url"){
+    kind="url";showStage("url");if(yt&&yt.pauseVideo)yt.pauseVideo();
+    if(curSrc!==v.src){curSrc=v.src;mv.src=v.src;mv.addEventListener("loadedmetadata",()=>cb&&cb(),{once:true})}else cb&&cb();
+  }else if(v.kind==="file"){
+    kind="file";showStage("file");if(yt&&yt.pauseVideo)yt.pauseVideo();
+    if(localFileName!==v.src){curSrc=null;mv.removeAttribute("src");mv.load();
+      sys("Pick your own copy of \""+v.src+"\" with Use a file. It plays in sync once loaded.");toast("Pick your copy of "+v.src+" to play in sync.");return}
+    cb&&cb();
+  }
+}
+/* ---------- synced playback ----------
+   A play is scheduled a moment ahead (LEAD) on the server's clock, so every device starts at the same instant.
+   Each device keeps its clock matched to the server's (see clock sync below). */
+const LEAD=800;
+function expectedTime(v){if(!v.playing)return v.time;const base=v.startAt||v.serverTime;return v.time+Math.max(0,(now()-base)/1000)}
+function near(t,tol){return Math.abs(P.time()-t)<(tol||0.3)}
+function rate(r){if(kind!=="yt"&&mv.playbackRate!==r)mv.playbackRate=r}
+function schedulePlay(v){
+  clearTimeout(S.startT);
+  const wait=v.startAt-now();
+  S.startT=setTimeout(()=>{if(S.shared!==v)return;S.suppressUntil=Date.now()+1500;const e=expectedTime(v);if(!near(e,0.25))P.seek(e);rate(1);P.play()},Math.max(0,wait));
+}
+function applyShared(v,announce){
+  const prev=S.shared;S.shared=v;clearTimeout(S.startT);
+  if(announce&&(!prev||prev.src!==v.src)){sys(v.by+" started a new video");pop("",v.by+" started a new video",true)}
+  else if(announce&&prev&&prev.playing!==v.playing){const t=v.by+(v.playing?" pressed play":" paused");sys(t);pop("",t,true)}
+  $("#nowText").innerHTML=`<b>${esc(v.title||v.src)}</b> · ${v.playing?"playing":"paused"} · last control by ${esc(v.by||"")}`;
+  S.suppressUntil=Date.now()+(v.startAt?Math.max(0,v.startAt-now()):0)+1500;
+  load(v,()=>{
+    S.suppressUntil=Date.now()+(v.startAt?Math.max(0,v.startAt-now()):0)+1500;rate(1);
+    if(v.playing&&v.startAt&&v.startAt>now()){            /* get ready, then start together */
+      if(!near(v.time))P.seek(v.time);P.pause();schedulePlay(v);
+    }else if(v.playing){const e=expectedTime(v);if(!near(e,0.4))P.seek(e);P.play()}
+    else{if(!near(v.time,0.25))P.seek(v.time);P.pause()}
+  });
+}
+function share(extra){
+  if(!kind)return;
+  const v=Object.assign({kind,src:kind==="file"?localFileName:curSrc,title:S.shared&&S.shared.src===(kind==="file"?localFileName:curSrc)?S.shared.title:null,time:P.time(),playing:P.playing()},extra||{});
+  if(!v.playing)delete v.startAt;
+  S.shared=Object.assign({},v,{serverTime:now(),by:S.name});
+  post("video",v);
+  $("#nowText").innerHTML=`<b>${esc(v.title||v.src)}</b> · ${v.playing?"playing":"paused"} · last control by you`;
+  return S.shared;
+}
+/* Play for everyone from time t, starting together a moment from now. */
+function startTogether(t,extra){
+  clearTimeout(S.startT);rate(1);
+  S.suppressUntil=Date.now()+LEAD+1500;
+  P.pause();if(!near(t,0.2))P.seek(t);
+  const v=share(Object.assign({time:t,playing:true,startAt:now()+LEAD},extra||{}));
+  if(v)schedulePlay(v);
+}
+function pauseAll(){clearTimeout(S.startT);rate(1);S.suppressUntil=Date.now()+1500;P.pause();share({playing:false,time:P.time()})}
+function goTo(t){t=Math.max(0,t);if(S.shared&&S.shared.playing)startTogether(t);else{S.suppressUntil=Date.now()+1500;P.seek(t);share({time:t,playing:false})}}
+function localEvent(e){
+  if(Date.now()<S.suppressUntil||!S.shared)return;
+  const sh=S.shared,t=P.time(),pl=P.playing();
+  if(pl&&!sh.playing)startTogether(t);
+  else if(!pl&&sh.playing&&(!e||e.type!=="seeked"))pauseAll();
+  else if(Math.abs(t-expectedTime(sh))>2)goTo(t);
+  $("#tapSync").hidden=true;
+}
+["play","pause","seeked"].forEach(ev=>mv.addEventListener(ev,localEvent));
+mv.addEventListener("ended",videoEnded);
+mv.addEventListener("loadedmetadata",()=>applySubs());
+function videoEnded(){if(curSrc&&(S.queue||[]).length)post("next",{src:curSrc})}
+/* YouTube has no seek event: notice jumps, and gently keep everyone together. */
+setInterval(()=>{
+  if(!kind||!S.shared)return;
+  const sh=S.shared,t=P.time(),exp=expectedTime(sh);
+  if(Date.now()<S.suppressUntil||(sh.startAt&&now()<sh.startAt+1500)){S.lastLocalTick={t,at:Date.now()};return}
+  if(kind==="yt"&&P.playing()===sh.playing&&Math.abs(t-exp)>3&&S.lastLocalTick.t){
+    const moved=Math.abs(t-(S.lastLocalTick.t+(sh.playing?(Date.now()-S.lastLocalTick.at)/1000:0)))>2.5;
+    if(moved){goTo(t);S.lastLocalTick={t:P.time(),at:Date.now()};return}
+  }
+  if(sh.playing&&P.playing()){
+    const diff=exp-t;
+    if(kind==="yt"){
+      if(Math.abs(diff)>1.2&&Date.now()-(S.lastFix||0)>5000){S.lastFix=Date.now();S.suppressUntil=Date.now()+1200;P.seek(exp)}
+    }else{
+      if(Math.abs(diff)>3){S.suppressUntil=Date.now()+1200;rate(1);P.seek(exp)}
+      else if(Math.abs(diff)>0.25)rate(diff>0?1.1:0.9);   /* catch up or ease back smoothly, no jump */
+      else rate(1);
+    }
+  }else rate(1);
+  S.lastLocalTick={t:P.time(),at:Date.now()};
+},1000);
+
+/* ---------- clock sync with the server ---------- */
+let bestRtt=Infinity;
+async function syncClock(){
+  try{const t0=Date.now();const r=await fetch("/time",{cache:"no-store"});const ts=Number(await r.text());const t1=Date.now();const rtt=t1-t0;
+    if(isFinite(ts)&&(rtt<=bestRtt*1.5||rtt<150)){bestRtt=Math.min(bestRtt,rtt);S.offset=ts-(t0+t1)/2}
+    S.rtt=rtt;}catch(e){}
+}
+[0,1500,4000].forEach(d=>setTimeout(syncClock,d));setInterval(()=>{bestRtt*=1.2;syncClock()},30000);
+
+$("#loadForm").addEventListener("submit",e=>{
+  e.preventDefault();const raw=$("#urlIn").value.trim();if(!raw)return;
+  const id=ytId(raw);
+  if(id){S.suppressUntil=Date.now()+3000;load({kind:"yt",src:id},()=>{setTimeout(()=>startTogether(0,{title:(yt.getVideoData&&yt.getVideoData().title)||"YouTube video"}),300)})}
+  else if(/^https?:\/\//i.test(raw)){S.suppressUntil=Date.now()+3000;load({kind:"url",src:raw},()=>startTogether(0,{title:raw.split("/").pop().split("?")[0]}));
+    mv.onerror=()=>toast("That link didn't play. Use a direct video link (.mp4 or .webm), or a YouTube link.")}
+  else{toast("Paste a full link starting with https://");return}
+  $("#urlIn").value="";
+});
+$("#fileIn").addEventListener("change",e=>{
+  const f=e.target.files[0];if(!f)return;localFileName=f.name;curSrc=null;kind="file";showStage("file");if(yt&&yt.pauseVideo)yt.pauseVideo();
+  mv.src=URL.createObjectURL(f);
+  mv.addEventListener("loadedmetadata",()=>{
+    if(S.shared&&S.shared.kind==="file"&&S.shared.src===f.name){applyShared(S.shared)}
+    else{P.seek(0);share({time:0,playing:false,title:f.name});toast("Ask your friends to pick the same file: "+f.name)}
+  },{once:true});
+  e.target.value="";
+});
+$("#syncBtn").addEventListener("click",()=>{if(!kind){toast("Start a video first.");return}if(P.playing())startTogether(P.time());else share({playing:false,time:P.time()});toast("Everyone is now synced to your position.")});
+$("#tapSyncBtn").addEventListener("click",()=>{$("#tapSync").hidden=true;if(S.shared){S.suppressUntil=Date.now()+1500;P.seek(expectedTime(S.shared));if(S.shared.playing)P.play()}});
+
+/* ---------- shared play / pause / skip buttons ---------- */
+function canControl(){if(!kind){toast("Start a video first.");return false}if(kind==="file"&&!localFileName){toast("Pick your copy of the file first.");return false}return true}
+$("#ppBtn").addEventListener("click",()=>{if(!canControl())return;
+  if(S.shared&&S.shared.playing)pauseAll();else startTogether(P.time());$("#tapSync").hidden=true;updatePP()});
+function skip(d){if(!canControl())return;goTo(P.time()+d)}
+$("#backBtn").addEventListener("click",()=>skip(-10));$("#fwdBtn").addEventListener("click",()=>skip(10));
+function updatePP(){const pl=S.shared?S.shared.playing:false;$("#ppBtn").textContent=pl?"Pause":"Play"}
+setInterval(updatePP,500);
+
+/* ---------- lower the movie while a friend is talking ---------- */
+S.duck=false;let ducked=false,baseVol=null;
+try{S.duck=localStorage.getItem("majlis.duck")==="1"}catch(e){}
+const duckBtn=$("#duckBtn");duckBtn.setAttribute("aria-pressed",String(S.duck));
+duckBtn.addEventListener("click",()=>{S.duck=!S.duck;duckBtn.setAttribute("aria-pressed",String(S.duck));try{localStorage.setItem("majlis.duck",S.duck?"1":"0")}catch(e){}
+  if(!S.duck&&ducked)setDuck(false);toast(S.duck?"The movie will get quieter while friends talk.":"Movie volume stays the same.")});
+function getVol(){try{return kind==="yt"?(yt&&yt.getVolume?yt.getVolume()/100:1):mv.volume}catch(e){return 1}}
+function setVol(v){try{if(kind==="yt"){yt&&yt.setVolume&&yt.setVolume(Math.round(v*100))}else mv.volume=Math.max(0,Math.min(1,v))}catch(e){}}
+function setDuck(on){if(on===ducked||!kind)return;if(on){baseVol=getVol();setVol(baseVol*0.3)}else if(baseVol!=null)setVol(baseVol);ducked=on}
+setInterval(()=>{if(!S.duck||!S.speakerOn)return;const anyone=[...S.peers.values()].some(p=>p.speaking);setDuck(anyone)},200);
+
+/* ---------- keep the screen awake during the movie, keep the free host awake ---------- */
+let wake=null;
+setInterval(async()=>{
+  const want=!!(S.shared&&S.shared.playing)&&document.visibilityState==="visible";
+  try{if(want&&!wake&&navigator.wakeLock){wake=await navigator.wakeLock.request("screen");wake.addEventListener("release",()=>wake=null)}
+      else if(!want&&wake){await wake.release();wake=null}}catch(e){}
+},3000);
+setInterval(()=>{if(S.room&&S.welcomed)post("beat")},240000);
+
+/* ---------- Majlis full screen ---------- */
+const stage=$("#stage");
+const fsEl=()=>document.fullscreenElement||document.webkitFullscreenElement;
+function isFs(){return stage.classList.contains("is-fs")}
+new MutationObserver(()=>{mv.controls=!isFs()}).observe(stage,{attributes:true,attributeFilter:["class"]});
+async function enterFs(){
+  const req=stage.requestFullscreen||stage.webkitRequestFullscreen;
+  if(req){try{await req.call(stage);try{screen.orientation&&screen.orientation.lock&&screen.orientation.lock("landscape").catch(()=>{})}catch(e){}return}catch(e){}}
+  /* iPhone and some app browsers can't make a page element full screen: fill the window instead */
+  stage.classList.add("pseudo-fs","is-fs");document.body.classList.add("lock");wakeBar();
+}
+function exitFs(){
+  if(fsEl()){(document.exitFullscreen||document.webkitExitFullscreen).call(document)}
+  stage.classList.remove("pseudo-fs","is-fs","idle");document.body.classList.remove("lock");
+}
+function onFsChange(){const on=fsEl()===stage;if(on){stage.classList.add("is-fs");wakeBar()}else if(!stage.classList.contains("pseudo-fs")){stage.classList.remove("is-fs","idle")}}
+document.addEventListener("fullscreenchange",onFsChange);document.addEventListener("webkitfullscreenchange",onFsChange);
+$("#fsBtn").addEventListener("click",()=>isFs()?exitFs():enterFs());
+$("#fsExit").addEventListener("click",exitFs);
+mv.addEventListener("dblclick",e=>{e.preventDefault();isFs()?exitFs():enterFs()});
+document.addEventListener("keydown",e=>{if(e.key==="Escape"&&stage.classList.contains("pseudo-fs"))exitFs()});
+/* hide the full screen controls after 3 seconds without movement; any tap or key brings them back */
+let idleT=null;
+function wakeBar(){stage.classList.remove("idle");clearTimeout(idleT);idleT=setTimeout(()=>{if(isFs()&&document.activeElement!==$("#fsChatIn"))stage.classList.add("idle")},3000)}
+["mousemove","touchstart","pointerdown","keydown"].forEach(ev=>stage.addEventListener(ev,wakeBar,{passive:true}));
+$("#fsPP").addEventListener("click",()=>$("#ppBtn").click());
+$("#fsBack").addEventListener("click",()=>$("#backBtn").click());$("#fsFwd").addEventListener("click",()=>$("#fwdBtn").click());
+function dur(){try{return kind==="yt"?(yt&&yt.getDuration?yt.getDuration():0):(isFinite(mv.duration)?mv.duration:0)}catch(e){return 0}}
+const clock=t=>{t=Math.max(0,Math.floor(t||0));const h=Math.floor(t/3600),m=Math.floor(t/60)%60,sec=String(t%60).padStart(2,"0");return h?h+":"+String(m).padStart(2,"0")+":"+sec:m+":"+sec};
+let seeking=false;const fsSeek=$("#fsSeek");
+fsSeek.addEventListener("input",()=>{seeking=true;$("#fsCur").textContent=clock(fsSeek.value);wakeBar()});
+fsSeek.addEventListener("change",()=>{seeking=false;if(!canControl())return;goTo(Number(fsSeek.value))});
+$("#fsMic").addEventListener("click",()=>$("#micBtn").click());
+$("#fsReact").addEventListener("click",()=>post("react",{e:"😂"}));
+$("#fsChat").addEventListener("submit",e=>{e.preventDefault();const v=$("#fsChatIn").value.trim();if(!v)return;post("chat",{text:v});$("#fsChatIn").value="";$("#fsChatIn").blur();wakeBar()});
+$("#fsChatIn").addEventListener("focus",()=>{clearTimeout(idleT);stage.classList.remove("idle")});
+function updateFsBar(){
+  const pl=S.shared?S.shared.playing:false;
+  $("#fsPP").innerHTML=pl?'<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>':'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5l12 7-12 7z"/></svg>';
+  if(isFs()&&kind&&!seeking){const d=dur(),t=P.time();fsSeek.max=Math.max(1,Math.floor(d));fsSeek.value=Math.floor(t);$("#fsCur").textContent=clock(t);$("#fsDur").textContent=clock(d)}
+  const live=!!(S.mic&&S.micOn);$("#fsMic").innerHTML=live?I.mic:I.micOff;$("#fsMic").classList.toggle("off",!live);
+}
+setInterval(updateFsBar,500);updateFsBar();
+
+/* ---------- movie queue ---------- */
+S.queue=[];
+function parseLink(raw){raw=String(raw||"").trim();const id=ytId(raw);if(id)return {kind:"yt",src:id};if(/^https?:\/\//i.test(raw))return {kind:"url",src:raw,title:decodeURIComponent(raw.split("/").pop().split("?")[0]||"")};return null}
+$("#queueAddBtn").addEventListener("click",()=>{
+  const it=parseLink($("#urlIn").value);if(!it){toast("Paste a YouTube or video link first, then press Add to queue.");return}
+  post("queue",{action:"add",item:it});$("#urlIn").value="";toast("Added to the queue.");
+});
+function renderQueue(){
+  const q=S.queue||[],box=$("#queueBox");box.hidden=!q.length;$("#queueCount").textContent=q.length?"("+q.length+")":"";
+  $("#queueList").innerHTML=q.map((it,i)=>`<li data-id="${esc(it.id)}"><span class="qt" title="${esc(it.title||it.src)}">${esc(it.title||(it.kind==="yt"?"YouTube video":it.src))}</span>
+    <button class="play" type="button" data-a="play">Play now</button>${i?`<button type="button" data-a="up" aria-label="Move up">↑</button>`:""}<button type="button" data-a="remove" aria-label="Remove">✕</button></li>`).join("");
+}
+$("#queueList").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;const id=b.closest("li").dataset.id;post("queue",{action:b.dataset.a,id})});
+
+/* ---------- subtitles: one person adds a file, everyone sees it ---------- */
+S.subs=null;S.subShift=0;S.subsOn=true;
+function srcKey(){return kind==="file"?localFileName:curSrc}
+function toVtt(text){
+  text=text.replace(/^\uFEFF/,"").replace(/\r\n?/g,"\n").trim();
+  if(/^WEBVTT/.test(text))return text;
+  return "WEBVTT\n\n"+text.replace(/(\d{1,2}:\d{2}:\d{2}),(\d{1,3})/g,"$1.$2").replace(/^(\d{2}:\d{2})\.(\d{3})/gm,"00:$1.$2");
+}
+function decodeText(buf){
+  try{return new TextDecoder("utf-8",{fatal:true}).decode(buf)}
+  catch(e){try{return new TextDecoder("windows-1256").decode(buf)}catch(e2){return new TextDecoder("utf-8").decode(buf)}} /* older Arabic subtitle files use Windows-1256 */
+}
+let subUrl=null;
+function applySubs(){
+  [...mv.querySelectorAll("track")].forEach(t=>t.remove());if(subUrl){URL.revokeObjectURL(subUrl);subUrl=null}
+  const ok=S.subs&&kind&&kind!=="yt"&&S.subs.src===srcKey();
+  $("#subsExtra").hidden=!ok;$("#subBtn").textContent=ok?(S.subsOn?"Subtitles on":"Subtitles off"):"Add subtitles";
+  if(ok)$("#subName").textContent=S.subs.name;
+  if(!ok){drawSub();return}
+  subUrl=URL.createObjectURL(new Blob([S.subs.vtt],{type:"text/vtt"}));
+  const tr=document.createElement("track");tr.kind="subtitles";tr.label="Subtitles";tr.srclang="und";tr.src=subUrl;tr.default=true;mv.appendChild(tr);
+  tr.addEventListener("load",()=>{if(S.subShift)shiftCues(S.subShift,true);drawSub()});
+  setTimeout(()=>{const t=mv.textTracks[0];if(t){t.mode="hidden";t.oncuechange=drawSub}},0);
+}
+function cues(){const t=mv.textTracks[0];return t&&t.cues?[...t.cues]:[]}
+function shiftCues(d,silent){cues().forEach(c=>{c.startTime=Math.max(0,c.startTime+d);c.endTime=Math.max(0,c.endTime+d)});setTimeout(drawSub,50);if(!silent){S.subShift+=d;toast("Subtitles shifted "+(S.subShift>0?"+":"")+S.subShift.toFixed(1)+"s (only on your screen)")}}
+/* draw the current subtitle line ourselves, so it always sits above the full-screen controls */
+function drawSub(){
+  const el=$("#subLine"),t=mv.textTracks[0];
+  const on=S.subsOn&&S.subs&&kind&&kind!=="yt"&&S.subs.src===srcKey()&&t&&t.activeCues&&t.activeCues.length;
+  if(!on){el.hidden=true;el.textContent="";return}
+  const txt=[...t.activeCues].map(c=>c.text.replace(/<[^>]+>/g,"")).join("\n");
+  el.innerHTML="";const sp=document.createElement("span");sp.textContent=txt;el.appendChild(sp);el.hidden=false;
+}
+$("#subBtn").addEventListener("click",()=>{
+  if(!kind){toast("Start a video first.");return}
+  if(kind==="yt"){toast("For YouTube, use the CC button in the YouTube player.");return}
+  if(S.subs&&S.subs.src===srcKey()){S.subsOn=!S.subsOn;drawSub();$("#subBtn").textContent=S.subsOn?"Subtitles on":"Subtitles off";return}
+  $("#subIn").click();
+});
+$("#subChange").addEventListener("click",()=>$("#subIn").click());
+$("#subEarlier").addEventListener("click",()=>shiftCues(-0.5));$("#subLater").addEventListener("click",()=>shiftCues(0.5));
+$("#subIn").addEventListener("change",async e=>{
+  const f=e.target.files[0];e.target.value="";if(!f)return;
+  if(f.size>1400000){toast("That subtitle file is too big (over 1.4 MB).");return}
+  const vtt=toVtt(decodeText(await f.arrayBuffer()));
+  if(!/-->/.test(vtt)){toast("That doesn't look like a subtitle file. Use a .srt or .vtt file.");return}
+  S.subs={name:f.name,vtt,src:srcKey(),by:S.name};S.subShift=0;S.subsOn=true;applySubs();
+  post("subs",{name:f.name,vtt,src:srcKey()});toast("Subtitles added for everyone.");
+});
+
+/* ---------- install as an app ---------- */
+let installEvt=null;
+try{if("serviceWorker" in navigator)navigator.serviceWorker.register("/sw.js").catch(()=>{})}catch(e){}
+window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();installEvt=e;$("#installBtn").hidden=false});
+$("#installBtn").addEventListener("click",async()=>{if(!installEvt)return;installEvt.prompt();try{await installEvt.userChoice}catch(e){}installEvt=null;$("#installBtn").hidden=true});
+window.addEventListener("appinstalled",()=>{$("#installBtn").hidden=true;toast("Majlis is installed. Open it from your home screen.")});
+(()=>{const ios=/iphone|ipad|ipod/i.test(navigator.userAgent),standalone=window.navigator.standalone||matchMedia("(display-mode: standalone)").matches;if(ios&&!standalone)$("#iosHint").hidden=false})();
+
+if(location.protocol!=="https:"&&!/^(localhost|127\.0\.0\.1)$/.test(location.hostname)){
+  setTimeout(()=>toast("This site needs https for mic and camera to work."),500);
+}
+})();
+</script>
+</body>
+</html>
